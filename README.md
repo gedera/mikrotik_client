@@ -1,43 +1,134 @@
 # MikrotikClient
 
-TODO: Delete this and the text below, and describe your gem
+A modern, high-performance, and multi-tenant Ruby client for MikroTik RouterOS v6 and v7.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/mikrotik_client`. To experiment with that code, run `bin/console` for an interactive prompt.
+MikrotikClient is built with a modular architecture inspired by Faraday and an ORM inspired by ActiveResource. It features advanced connection pooling, automatic protocol detection, and a flexible middleware stack.
+
+## Key Features
+
+- **Dual Protocol Support:** Native Binary API (v6/v7) and REST API (v7.1+).
+- **Connection Pooling:** Persistent TCP sockets with automatic reaper for idle connections.
+- **Multi-tenancy Ready:** Seamlessly switch between thousands of routers using thread-safe context scoping.
+- **Middleware Stack:** Instrumented logs, semantic error handling, and automatic data transformation.
+- **ActiveRecord-like ORM:** Simple and expressive syntax for managing MikroTik resources.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+Add this line to your application's Gemfile:
 
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```ruby
+gem 'mikrotik_client'
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+And then execute:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+$ bundle install
 ```
 
-## Usage
+### Rails Integration
 
-TODO: Write usage instructions here
+Run the installer to create the initializer:
+
+```bash
+$ rails generate mikrotik_client:install
+```
+
+## Basic Usage
+
+### Configuration
+
+Set up global defaults in `config/initializers/mikrotik_client.rb`:
+
+```ruby
+MikrotikClient.configure do |config|
+  config.pool_size = 5
+  config.idle_timeout = 300 # 5 minutes
+end
+```
+
+### Context Scoping (Multi-tenancy)
+
+In a multi-tenant environment (e.g., Sidekiq job or Rails controller), you can set the context for all subsequent ORM calls:
+
+```ruby
+# Temporary scope (ideal for Jobs or Scripts)
+MikrotikClient.with_config(host: '10.0.0.1', user: 'admin', pass: 'pass') do
+  interfaces = Interface.all
+end
+
+# Persistent scope (ideal for Rails before_action)
+MikrotikClient::Current.config = { host: '10.0.0.1', user: 'admin', pass: 'pass' }
+# Now you can use models directly
+IpAddress.all
+```
+
+## ORM Usage
+
+Define your models by inheriting from `MikrotikClient::Base`:
+
+```ruby
+class IpAddress < MikrotikClient::Base
+  self.mikrotik_path = "/ip/address"
+end
+```
+
+### CRUD Operations
+
+```ruby
+# READ
+addresses = IpAddress.all
+ether1_ips = IpAddress.where(interface: 'ether1')
+
+# CREATE
+new_ip = IpAddress.create(address: '1.1.1.1/24', interface: 'ether1')
+
+# UPDATE
+new_ip.update(disabled: true)
+# or
+new_ip.comment = "Added via Gem"
+new_ip.save
+
+# DELETE
+new_ip.destroy
+```
+
+## Advanced Client Usage
+
+If you need low-level access, you can build a custom client:
+
+```ruby
+client = MikrotikClient.new do |conn|
+  conn.host = '10.0.0.1'
+  conn.user = 'admin'
+  conn.pass = 'password'
+  conn.adapter :binary # or :http for REST API v7
+  
+  conn.use MikrotikClient::Middleware::Logger
+  conn.use MikrotikClient::Middleware::RaiseError
+  conn.use MikrotikClient::Middleware::Transformer
+end
+
+response = client.get('/ip/address', { interface: 'ether1' })
+```
+
+## Middlewares
+
+The client uses a pipeline of middlewares to process requests and responses:
+
+1.  **Logger:** Uses `ActiveSupport::Notifications` and the global logger.
+2.  **RaiseError:** Converts MikroTik `!trap` and HTTP errors into semantic Ruby exceptions (`NotFound`, `Conflict`, `PermissionError`).
+3.  **Transformer:** Converts kebab-case keys to snake_case symbols and casts strings to Booleans/Integers.
+4.  **Encoder:** Transparently handles ISO-8859-1 encoding for MikroTik v6.
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+Run tests against a real MikroTik device (v6 or v7):
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
-
-## Contributing
-
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/mikrotik_client. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/mikrotik_client/blob/master/CODE_OF_CONDUCT.md).
+```bash
+MTIK_HOST=10.0.0.1 MIK_USER=admin MTIK_PASS=pass bundle exec rspec
+```
 
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-
-## Code of Conduct
-
-Everyone interacting in the MikrotikClient project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/mikrotik_client/blob/master/CODE_OF_CONDUCT.md).
