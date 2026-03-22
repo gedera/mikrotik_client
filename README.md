@@ -27,6 +27,75 @@ And then execute:
 $ bundle install
 ```
 
+## Global Configuration
+
+Configure the gem once at boot time (e.g. `config/initializers/mikrotik_client.rb` in Rails):
+
+```ruby
+MikrotikClient.configure do |config|
+  # Logger instance — defaults to Logger.new($stdout)
+  config.logger = Rails.logger
+
+  # Log level — defaults to Logger::INFO
+  # Changing it automatically applies to the current logger instance.
+  config.log_level = Logger::INFO
+
+  # Connection timeouts (seconds)
+  config.connect_timeout = 5   # default
+  config.read_timeout    = 10  # default
+
+  # Connection pool per router
+  config.pool_size    = 5    # default — connections per router
+  config.pool_timeout = 5    # default — seconds to wait for a free connection
+  config.idle_timeout = 300  # default — seconds before an idle pool is removed
+end
+```
+
+### Logger & Observability
+
+MikrotikClient emits structured `key=value` log lines compatible with Datadog, ELK, Loki, and CloudWatch without any extra configuration.
+
+**INFO** (every request):
+```
+component=mikrotik_client event=request method=GET path=/ip/address host=10.0.0.1 adapter=binary duration_ms=4.02 status=ok
+component=mikrotik_client event=request method=POST path=/ip/firewall/address-list host=10.0.0.1 adapter=binary duration_ms=8.44 status=error error_class=MikrotikClient::Conflict error=already have such entry
+```
+
+**INFO** (connection pool lifecycle):
+```
+component=mikrotik_client event=pool_created key=admin@10.0.0.1:8728 adapter=binary pool_size=5
+component=mikrotik_client event=pool_pruned key=admin@10.0.0.1:8728 idle_for_seconds=312
+```
+
+**DEBUG** (full request detail — only evaluated when log level permits):
+```
+component=mikrotik_client event=request_detail params={"interface"=>"ether1"}
+component=mikrotik_client event=request_detail body={"pass"=>"[FILTERED]"}
+component=mikrotik_client event=request_detail response=[{:address=>"10.0.0.1/24", ...}]
+```
+
+> Sensitive keys (`password`, `pass`, `passwd`, `secret`, `token`) are automatically redacted in debug body output.
+
+#### ActiveSupport::Notifications
+
+Every request also publishes a `request.mikrotik_client` event you can subscribe to for custom metrics or tracing:
+
+```ruby
+ActiveSupport::Notifications.subscribe("request.mikrotik_client") do |*args|
+  event = ActiveSupport::Notifications::Event.new(*args)
+
+  StatsD.histogram("mikrotik.request.duration", event.payload[:duration_ms],
+    tags: [
+      "host:#{event.payload[:host]}",
+      "adapter:#{event.payload[:adapter]}",
+      "status:#{event.payload[:status]}"
+    ]
+  )
+end
+```
+
+Available payload keys: `:method`, `:path`, `:host`, `:adapter`, `:duration_ms`, `:status` (`:ok` or `:error`), `:error_class`, `:error_message`.
+
 ## Advanced Client Usage (Faraday Style)
 
 The core of MikrotikClient is its flexible client, which works exactly like Faraday. You can initialize it with a base URL/path and configure it via a block.
@@ -34,22 +103,22 @@ The core of MikrotikClient is its flexible client, which works exactly like Fara
 ### Initialization & Configuration
 
 ```ruby
-client = MikrotikClient.new("/ip/address") do |conn|
+client = MikrotikClient.new do |conn|
   # Connection settings
   conn.host = '192.168.88.1'
   conn.user = 'admin'
   conn.pass = 'password'
-  
-  # Adapter selection (:binary for API, :http for REST)
+  conn.port = 8728  # default for Binary API
+
+  # Adapter selection (:binary for v6/v7, :http for REST v7.1+)
   conn.adapter :binary
-  
-  # Default parameters for all requests from this client
-  conn.params = { interface: 'ether1' }
-  
-  # Middleware stack configuration
-  conn.use MikrotikClient::Middleware::Logger
-  conn.use MikrotikClient::Middleware::RaiseError
-  conn.use MikrotikClient::Middleware::Transformer
+
+  # Middleware stack — order matters, declared top-to-bottom is execution order
+  conn.use MikrotikClient::Middleware::Transformer        # response: kebab→snake_case, type casting
+  conn.use MikrotikClient::Middleware::RequestTransformer # request:  snake_case→kebab, :id→.id
+  conn.use MikrotikClient::Middleware::Logger             # structured logging + notifications
+  conn.use MikrotikClient::Middleware::RaiseError         # maps errors to Ruby exceptions
+  conn.use MikrotikClient::Middleware::Encoder            # encoding for Binary API (UTF-8↔ISO-8859-1)
 end
 ```
 
@@ -163,12 +232,34 @@ end
 
 ## Middlewares
 
-The client uses a pipeline of middlewares to process requests and responses:
+The client uses a declarative middleware pipeline. Each middleware is added explicitly with `conn.use`, and the order you declare them is the order they execute on the request (and reverse on the response).
 
-1.  **Logger:** Uses `ActiveSupport::Notifications` and the global logger.
-2.  **RaiseError:** Converts MikroTik `!trap` and HTTP errors into semantic Ruby exceptions (`NotFound`, `Conflict`, etc.).
-3.  **Transformer:** Converts MikroTik kebab-case keys to snake_case symbols and handles data type casting.
-4.  **Encoder:** Transparently handles encoding for different RouterOS versions.
+| Middleware | Direction | Responsibility |
+|---|---|---|
+| `Transformer` | Response | Converts kebab-case keys to `snake_case` symbols, casts `"true"`/`"false"` to booleans, numeric strings to integers/floats. Skipped for `:raw` requests. |
+| `RequestTransformer` | Request | Converts `snake_case` symbols to kebab-case strings, maps `:id` → `".id"` (MikroTik convention). |
+| `Logger` | Both | Emits structured `key=value` log lines. Publishes `request.mikrotik_client` notification. Sensitive body keys are filtered. |
+| `RaiseError` | Response | Maps MikroTik `!trap`/`!fatal` and HTTP error codes to typed Ruby exceptions (`NotFound`, `Conflict`, `AuthenticationError`, etc.). |
+| `Encoder` | Both | Handles UTF-8 ↔ ISO-8859-1 encoding for the Binary API. No-op for the HTTP adapter. |
+
+To add a custom middleware, implement `#call(env)` and insert it at the right position:
+
+```ruby
+class MyAuditMiddleware < MikrotikClient::Middleware::Base
+  def call(env)
+    @app.call(env)
+    AuditLog.record(path: env[:path], method: env[:method])
+    env
+  end
+end
+
+conn.use MikrotikClient::Middleware::Transformer
+conn.use MikrotikClient::Middleware::RequestTransformer
+conn.use MikrotikClient::Middleware::Logger
+conn.use MyAuditMiddleware   # runs after Logger, before RaiseError
+conn.use MikrotikClient::Middleware::RaiseError
+conn.use MikrotikClient::Middleware::Encoder
+```
 
 ## Development
 
