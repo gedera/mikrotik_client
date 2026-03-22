@@ -21,6 +21,10 @@ module MikrotikClient
 
       # Executes a request over the REST API.
       def call(env)
+        if env[:type] == :stream
+          raise NotImplementedError, "Streaming is not supported by the HTTP adapter (REST API). Use the Binary adapter for streaming."
+        end
+
         http_method = METHOD_MAP[env[:method]] || env[:method]
         params = (env[:params] || {}).with_indifferent_access
         
