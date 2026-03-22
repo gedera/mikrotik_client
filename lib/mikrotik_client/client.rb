@@ -24,13 +24,22 @@ module MikrotikClient
     # @return [Array<Array>] Middleware stack.
     attr_reader :middlewares
 
+    # @return [String, nil] Base URL or path.
+    attr_accessor :url
+
+    # @return [Hash] Default parameters for all requests.
+    attr_accessor :params
+
     # Delegate configuration methods to the configuration object
     def_delegators :@configuration, :host, :host=, :port, :port=, :user, :user=, :pass, :pass=, :adapter
 
     # Initialize a new client with a configuration block.
     #
+    # @param url [String, nil] Base URL or path.
     # @yield [self] The client instance.
-    def initialize
+    def initialize(url = nil)
+      @url = url
+      @params = {}
       @configuration = Configuration.new
       @middlewares = []
       yield(self) if block_given?
@@ -47,39 +56,43 @@ module MikrotikClient
 
     # Performs a GET request (print in MikroTik API).
     #
-    # @param path [String] Command path (e.g., "/ip/address").
-    # @param params [Hash] Optional filters or arguments.
+    # @param path [String, nil] Command path (e.g., "/ip/address").
+    # @param params [Hash, nil] Optional filters or arguments.
+    # @yield [request] Optional block to configure the request.
     # @return [Array<Hash>, Hash] Command results.
-    def get(path, params = {})
-      run_request(:get, path, nil, params)
+    def get(path = nil, params = nil, &block)
+      run_request(:get, path, nil, params, &block)
     end
 
     # Performs a POST request (add in MikroTik API).
     #
-    # @param path [String] Command path.
-    # @param body [Hash] Data to add.
+    # @param path [String, nil] Command path.
+    # @param body [Hash, nil] Data to add.
+    # @yield [request] Optional block to configure the request.
     # @return [Hash] Result of the operation.
-    def post(path, body = {})
-      run_request(:post, path, body, {})
+    def post(path = nil, body = nil, &block)
+      run_request(:post, path, body, nil, &block)
     end
 
     # Performs a PUT/PATCH request (set in MikroTik API).
     #
-    # @param path [String] Command path.
-    # @param body [Hash] Data to update.
-    # @param params [Hash] Optional filters to identify the target.
+    # @param path [String, nil] Command path.
+    # @param body [Hash, nil] Data to update.
+    # @param params [Hash, nil] Optional filters to identify the target.
+    # @yield [request] Optional block to configure the request.
     # @return [Hash] Result of the operation.
-    def put(path, body = {}, params = {})
-      run_request(:put, path, body, params)
+    def put(path = nil, body = nil, params = nil, &block)
+      run_request(:put, path, body, params, &block)
     end
 
     # Performs a DELETE request (remove in MikroTik API).
     #
-    # @param path [String] Command path.
-    # @param params [Hash] Optional filters (like .id).
+    # @param path [String, nil] Command path.
+    # @param params [Hash, nil] Optional filters (like .id).
+    # @yield [request] Optional block to configure the request.
     # @return [Hash] Result of the operation.
-    def delete(path, params = {})
-      run_request(:delete, path, nil, params)
+    def delete(path = nil, params = nil, &block)
+      run_request(:delete, path, nil, params, &block)
     end
 
     # Resolve an adapter class by its symbolic name.
@@ -102,16 +115,20 @@ module MikrotikClient
     # Internal method to orquestrate the middleware pipeline.
     #
     # @param method [Symbol] HTTP-like method name.
-    # @param path [String] Command path.
+    # @param path [String, nil] Command path.
     # @param body [Hash, nil] Request body.
-    # @param params [Hash] Request parameters.
+    # @param params [Hash, nil] Request parameters.
+    # @yield [request] Optional block to configure the request.
     # @return [Object] Final processed response.
     def run_request(method, path, body, params)
+      request = Request.new(path || @url, (@params || {}).merge(params || {}), body)
+      yield(request) if block_given?
+
       env = {
         method: method,
-        path: path,
-        body: body,
-        params: params,
+        path: request.path,
+        body: request.body,
+        params: request.params,
         configuration: configuration,
         response: nil
       }

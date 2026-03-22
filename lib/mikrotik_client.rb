@@ -83,15 +83,15 @@ module MikrotikClient
     # Helper method to create a new client instance
     #
     # @example Create a client with REST adapter
-    #   client = MikrotikClient.new do |conn|
-    #     conn.host = "192.168.88.1"
+    #   client = MikrotikClient.new("/ip/address") do |conn|
     #     conn.adapter :http
     #   end
     #
-    # @yield [config] Configuration block
+    # @param url [String, nil] Base URL or path.
+    # @yield [client] The client instance
     # @return [MikrotikClient::Client] A new client instance
-    def new(&block)
-      Client.new(&block)
+    def new(url = nil, &block)
+      Client.new(url, &block)
     end
   end
 end

@@ -1,13 +1,14 @@
 # MikrotikClient
 
-A modern, high-performance, and multi-tenant Ruby client for MikroTik RouterOS v6 and v7.
+A modern, high-performance, and multi-tenant Ruby client for MikroTik RouterOS v6 and v7, designed with a familiar **Faraday-like interface**.
 
-MikrotikClient is built with a modular architecture inspired by Faraday and an ORM inspired by ActiveResource. It features advanced connection pooling, automatic protocol detection, and a flexible middleware stack.
+MikrotikClient is built with a modular architecture that features advanced connection pooling, automatic protocol detection, and a flexible middleware stack. It also includes an ORM inspired by ActiveResource for effortless resource management.
 
 ## Key Features
 
+- **Faraday-inspired API:** Familiar block-based configuration and request cycle.
 - **Dual Protocol Support:** Native Binary API (v6/v7) and REST API (v7.1+).
-- **Connection Pooling:** Persistent TCP sockets with automatic reaper for idle connections.
+- **Connection Pooling:** Persistent TCP sockets with an automatic reaper for idle connections.
 - **Multi-tenancy Ready:** Seamlessly switch between thousands of routers using thread-safe context scoping.
 - **Middleware Stack:** Instrumented logs, semantic error handling, and automatic data transformation.
 - **ActiveRecord-like ORM:** Simple and expressive syntax for managing MikroTik resources.
@@ -26,46 +27,60 @@ And then execute:
 $ bundle install
 ```
 
-### Rails Integration
+## Advanced Client Usage (Faraday Style)
 
-Run the installer to create the initializer:
+The core of MikrotikClient is its flexible client, which works exactly like Faraday. You can initialize it with a base URL/path and configure it via a block.
 
-```bash
-$ rails generate mikrotik_client:install
-```
-
-## Basic Usage
-
-### Configuration
-
-Set up global defaults in `config/initializers/mikrotik_client.rb`:
+### Initialization & Configuration
 
 ```ruby
-MikrotikClient.configure do |config|
-  config.pool_size = 5
-  config.idle_timeout = 300 # 5 minutes
+client = MikrotikClient.new("/ip/address") do |conn|
+  # Connection settings
+  conn.host = '192.168.88.1'
+  conn.user = 'admin'
+  conn.pass = 'password'
+  
+  # Adapter selection (:binary for API, :http for REST)
+  conn.adapter :binary
+  
+  # Default parameters for all requests from this client
+  conn.params = { interface: 'ether1' }
+  
+  # Middleware stack configuration
+  conn.use MikrotikClient::Middleware::Logger
+  conn.use MikrotikClient::Middleware::RaiseError
+  conn.use MikrotikClient::Middleware::Transformer
 end
 ```
 
-### Context Scoping (Multi-tenancy)
+### Making Requests
 
-In a multi-tenant environment (e.g., Sidekiq job or Rails controller), you can set the context for all subsequent ORM calls:
+You can use `send(method)` or direct methods like `get`, `post`, `put`, and `delete`. Each method accepts an optional block to configure the specific request.
 
 ```ruby
-# Temporary scope (ideal for Jobs or Scripts)
-MikrotikClient.with_config(host: '10.0.0.1', user: 'admin', pass: 'pass') do
-  interfaces = Interface.all
+# GET request with additional filters
+response = client.send('get') do |req|
+  req.params[:disabled] = 'no'
 end
 
-# Persistent scope (ideal for Rails before_action)
-MikrotikClient::Current.config = { host: '10.0.0.1', user: 'admin', pass: 'pass' }
-# Now you can use models directly
-IpAddress.all
+# POST request with a body
+client.post("/ip/firewall/filter") do |req|
+  req.body = {
+    chain: 'input',
+    action: 'drop',
+    protocol: 'icmp'
+  }
+end
+
+# The request object 'req' allows full control:
+# req.path   => Override or extend the base path
+# req.params => Specific query parameters/filters
+# req.body   => Data for write operations
 ```
 
 ## ORM Usage
 
-Define your models by inheriting from `MikrotikClient::Base`:
+For a higher-level abstraction, use the built-in ORM. Define your models by inheriting from `MikrotikClient::Base`:
 
 ```ruby
 class IpAddress < MikrotikClient::Base
@@ -74,6 +89,8 @@ end
 ```
 
 ### CRUD Operations
+
+The ORM automatically uses the current connection context:
 
 ```ruby
 # READ
@@ -86,30 +103,23 @@ new_ip = IpAddress.create(address: '1.1.1.1/24', interface: 'ether1')
 # UPDATE
 new_ip.update(disabled: true)
 # or
-new_ip.comment = "Added via Gem"
+new_ip.comment = "Updated via ORM"
 new_ip.save
 
 # DELETE
 new_ip.destroy
 ```
 
-## Advanced Client Usage
+## Multi-tenancy & Context Scoping
 
-If you need low-level access, you can build a custom client:
+Easily manage multiple routers by wrapping your code in a `with_config` block:
 
 ```ruby
-client = MikrotikClient.new do |conn|
-  conn.host = '10.0.0.1'
-  conn.user = 'admin'
-  conn.pass = 'password'
-  conn.adapter :binary # or :http for REST API v7
-  
-  conn.use MikrotikClient::Middleware::Logger
-  conn.use MikrotikClient::Middleware::RaiseError
-  conn.use MikrotikClient::Middleware::Transformer
+# Temporary scope (ideal for Background Jobs or Scripts)
+MikrotikClient.with_config(host: '10.0.0.1', user: 'admin', pass: 'secret') do
+  # All ORM calls here will target 10.0.0.1
+  interfaces = Interface.all
 end
-
-response = client.get('/ip/address', { interface: 'ether1' })
 ```
 
 ## Middlewares
@@ -117,9 +127,9 @@ response = client.get('/ip/address', { interface: 'ether1' })
 The client uses a pipeline of middlewares to process requests and responses:
 
 1.  **Logger:** Uses `ActiveSupport::Notifications` and the global logger.
-2.  **RaiseError:** Converts MikroTik `!trap` and HTTP errors into semantic Ruby exceptions (`NotFound`, `Conflict`, `PermissionError`).
-3.  **Transformer:** Converts kebab-case keys to snake_case symbols and casts strings to Booleans/Integers.
-4.  **Encoder:** Transparently handles ISO-8859-1 encoding for MikroTik v6.
+2.  **RaiseError:** Converts MikroTik `!trap` and HTTP errors into semantic Ruby exceptions (`NotFound`, `Conflict`, etc.).
+3.  **Transformer:** Converts MikroTik kebab-case keys to snake_case symbols and handles data type casting.
+4.  **Encoder:** Transparently handles encoding for different RouterOS versions.
 
 ## Development
 
