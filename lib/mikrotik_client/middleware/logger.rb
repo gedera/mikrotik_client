@@ -18,7 +18,7 @@ module MikrotikClient
         start_time = Time.now
         
         ActiveSupport::Notifications.instrument("request.mikrotik_client", 
-          host: env[:configuration].host,
+          host: env[:settings].host,
           path: env[:path],
           method: env[:method]
         ) do
@@ -37,7 +37,7 @@ module MikrotikClient
       # @param duration [Float] Execution time in milliseconds.
       def log_request(env, duration)
         msg = "[MikrotikClient] #{env[:method].upcase} #{env[:path]} " \
-              "(#{duration.round(2)}ms) - Host: #{env[:configuration].host}"
+              "(#{duration.round(2)}ms) - Host: #{env[:settings].host}"
         
         # Log basic info
         MikrotikClient.logger.info(msg)

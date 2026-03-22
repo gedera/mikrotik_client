@@ -20,7 +20,7 @@ module MikrotikClient
       # @param env [Hash] The request environment.
       # @return [Hash]
       def call(env)
-        return @app.call(env) unless env[:configuration].adapter_name == :binary
+        return @app.call(env) unless env[:settings].adapter_name == :binary
 
         # 1. Encode outgoing data (UTF-8 -> ISO-8859-1)
         env[:path]   = encode_recursive(env[:path])
