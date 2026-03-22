@@ -54,11 +54,9 @@ module MikrotikClient
 
         MikrotikClient.logger.public_send(level, line)
 
-        if MikrotikClient.logger.debug?
-          MikrotikClient.logger.debug "component=mikrotik_client event=request_detail params=#{env[:params].inspect}"
-          MikrotikClient.logger.debug "component=mikrotik_client event=request_detail body=#{sanitize(env[:body]).inspect}"
-          MikrotikClient.logger.debug "component=mikrotik_client event=request_detail response=#{env[:response].inspect}" unless exception
-        end
+        MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail params=#{env[:params].inspect}" }
+        MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail body=#{sanitize(env[:body]).inspect}" }
+        MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail response=#{env[:response].inspect}" } unless exception
       rescue => log_error
         MikrotikClient.logger.warn "component=mikrotik_client event=logger_failure error=#{log_error.message}" rescue nil
       end
