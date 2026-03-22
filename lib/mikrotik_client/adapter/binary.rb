@@ -79,17 +79,18 @@ module MikrotikClient
       # Builds the API command sentence.
       def build_command(env)
         cmd = ["#{env[:path]}/#{COMMAND_MAP[env[:method]]}"]
-        
-        # RequestTransformer already converted keys to kebab-case and .id
+
+        # RequestTransformer already converted keys to kebab-case and .id.
+        # Explicit .to_s guards against non-string keys/values reaching the socket.
         if env[:body]
-          env[:body].each { |k, v| cmd << "=#{k}=#{v}" }
+          env[:body].each { |k, v| cmd << "=#{k}=#{v.to_s}" }
         end
 
         if env[:params]
           env[:params].each do |k, v|
             # Standard query for print (?) or identification (=)
             prefix = (env[:method] == :get) ? "?" : "="
-            cmd << "#{prefix}#{k}=#{v}"
+            cmd << "#{prefix}#{k}=#{v.to_s}"
           end
         end
 

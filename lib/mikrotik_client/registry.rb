@@ -90,6 +90,7 @@ module MikrotikClient
     # @param settings [ConnectionSettings]
     # @return [PoolEntry]
     def create_entry(settings)
+      settings.validate!
       size = settings.adapter_options[:pool_size] || MikrotikClient.config.pool_size
       timeout = settings.adapter_options[:pool_timeout] || MikrotikClient.config.pool_timeout
 

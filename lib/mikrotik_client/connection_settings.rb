@@ -34,5 +34,18 @@ module MikrotikClient
     def connection_key
       "#{user}@#{host}:#{port}"
     end
+
+    # Validates that all required settings are present and valid.
+    # Raises ArgumentError with a descriptive message if any are missing or invalid.
+    #
+    # @raise [ArgumentError]
+    # @return [void]
+    def validate!
+      errors = []
+      errors << "host is required" if host.nil? || host.to_s.strip.empty?
+      errors << "user is required" if user.nil? || user.to_s.strip.empty?
+      errors << "port must be an integer between 1 and 65535" unless port.is_a?(Integer) && port.between?(1, 65_535)
+      raise ArgumentError, "Invalid connection settings: #{errors.join(', ')}" if errors.any?
+    end
   end
 end
