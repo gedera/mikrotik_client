@@ -65,3 +65,32 @@ El ORM no ejecuta peticiones inmediatamente.
 ## Consideraciones de Multi-tenancy
 
 La gema utiliza `ActiveSupport::CurrentAttributes` (vía `MikrotikClient::Current`) para mantener el contexto de conexión por hilo. Esto permite que en aplicaciones Rails o Jobs de Sidekiq, cada hilo trabaje con un router diferente sin riesgo de colisión, manteniendo la simplicidad del ORM.
+
+## Comportamiento en Entornos Distribuidos y Concurrencia
+
+Es fundamental entender cómo el `Registry` y los pools de conexiones se comportan al escalar la aplicación (ej. servidores web Puma, trabajadores Sidekiq o consumidores RabbitMQ).
+
+### 1. Aislamiento a nivel de Proceso
+El `Registry` es una instancia en memoria **local a cada proceso de Ruby**. Los sockets TCP y las sesiones HTTP no se comparten entre procesos del sistema operativo.
+- Si utilizas un servidor web en modo cluster (varios workers), cada worker tendrá su propio `Registry` y sus propios pools.
+- Si levantas varios contenedores de Docker, cada uno tendrá su propia gestión de conexiones.
+
+### 2. Aprovechamiento a nivel de Hilos (Threads)
+Dentro de un mismo proceso, el `Registry` es compartido y **thread-safe**.
+- En **Sidekiq** o **Puma**, todos los hilos que necesiten hablar con el mismo router compartirán el mismo pool.
+- Esto maximiza la eficiencia al reutilizar conexiones ya autenticadas entre diferentes Jobs o peticiones web.
+
+### 3. Resumen de Escenarios
+
+| Escenario | ¿Comparten Conexiones? | Impacto en MikroTik |
+| :--- | :--- | :--- |
+| **Mismo proceso, diferentes hilos** | **SÍ** | Óptimo. Reutilización máxima de sockets. |
+| **Diferentes procesos (Workers/Clusters)** | **NO** | Multiplica el nº de conexiones por el nº de procesos. |
+| **Diferentes máquinas o contenedores** | **NO** | Cada instancia es independiente. |
+
+### 4. Recomendaciones para el Escalado
+Dado que los routers MikroTik tienen un límite de conexiones simultáneas para la API (típicamente entre 10 y 20), se recomiendan las siguientes estrategias:
+
+- **Ajustar el `pool_size`**: En entornos con muchos procesos independientes, mantén un `pool_size` bajo (ej. 2 o 3) para evitar saturar el router.
+- **Configurar el `idle_timeout`**: Utiliza el `Reaper` para cerrar conexiones inactivas rápidamente en entornos de ráfagas.
+- **Centralización**: Si la infraestructura crece a cientos de nodos, considera centralizar las peticiones a MikroTik en un servicio dedicado que actúe como único cliente real (Proxy).
