@@ -17,6 +17,8 @@ module MikrotikClient
       def call(env)
         @app.call(env)
         
+        return env if env[:type] == :raw
+
         env[:response] = transform_recursive(env[:response])
         env
       end

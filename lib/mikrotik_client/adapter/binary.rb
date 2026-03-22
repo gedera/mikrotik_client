@@ -105,21 +105,32 @@ module MikrotikClient
         loop do
           sentence = @protocol.read_sentence
           type = sentence.shift
-          
+
           case type
           when "!re"
-            results << parse_sentence(sentence)
+            data = parse_sentence(sentence)
+            # If no attributes were parsed, it might be a raw line (like in /export)
+            data = sentence if data.empty? && env[:type] == :raw
+
+            if env[:type] == :stream && env[:on_data]
+              # Execute callback and check if user wants to stop
+              break if env[:on_data].call(data) == :stop
+            else
+              results << data
+            end
           when "!done"
             return error if error
 
             ret = parse_sentence(sentence)
             ret["id"] ||= ret["ret"] if ret["ret"]
-            
-            return results if env[:method] == :get
+
+            return results if env[:method] == :get || env[:type] == :stream
             return results.empty? ? ret : results
           when "!trap", "!fatal"
             error = parse_sentence(sentence)
             error["_error_type"] = type
+            # In a stream, we might want to stop on error
+            break if env[:type] == :stream
           end
         end
       end

@@ -114,6 +114,8 @@ module MikrotikClient
         path: request.path,
         body: request.body,
         params: request.params,
+        type: request.type,
+        on_data: request.on_data,
         settings: settings,
         response: nil
       }

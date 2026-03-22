@@ -51,6 +51,14 @@ El ORM no ejecuta peticiones inmediatamente.
 - **Por qué**: Permite encadenar filtros (`.where(...).where(...)`) y permite inyectar clientes específicos antes de la ejecución.
 - **Cómo**: `MikrotikClient::Scope` acumula el estado de la consulta y solo llama al cliente cuando se itera sobre los resultados (`.to_a`, `.each`).
 
+### 7. Request Intent Pattern (Tipos de Petición)
+El sistema permite cambiar el comportamiento de toda la tubería mediante el atributo `type` en el objeto `Request`.
+- **Por qué**: No todas las peticiones a un router son para obtener objetos. Algunas son flujos infinitos (monitor) o datos no estructurados (export).
+- **Cómo**: 
+    - `:orm` (default): Flujo completo con transformaciones.
+    - `:raw`: Desactiva middlewares de transformación para fidelidad total.
+    - `:stream`: Cambia el ciclo de lectura del adaptador para usar callbacks (`on_data`) en lugar de acumular en arrays, permitiendo monitoreo en tiempo real con uso de memoria constante.
+
 ## Flujo de una Petición
 
 1.  **Entrada**: El usuario llama a `IpAddress.where(interface: 'ether1').all`.

@@ -73,9 +73,40 @@ client.post("/ip/firewall/filter") do |req|
 end
 
 # The request object 'req' allows full control:
-# req.path   => Override or extend the base path
-# req.params => Specific query parameters/filters
-# req.body   => Data for write operations
+# req.path    => Override or extend the base path
+# req.params  => Specific query parameters/filters
+# req.body    => Data for write operations
+# req.type    => Mode: :orm (default), :raw, or :stream
+# req.on_data => Callback for :stream mode
+```
+
+### Advanced Modes (Raw & Streaming)
+
+For special operations like config exports or real-time monitoring, you can change the request type.
+
+#### Raw Mode
+Disables automatic transformations (kebab to snake_case) and returns the data exactly as it comes from the router.
+
+```ruby
+# Fetch config export without symbol/case transformations
+raw_config = client.get("/export") do |req|
+  req.type = :raw
+end
+```
+
+#### Streaming Mode
+Perfect for commands that never end (e.g., `monitor-traffic`). It uses a callback to process data as it arrives without filling up memory.
+
+```ruby
+client.get("/interface/monitor-traffic") do |req|
+  req.params = { interface: 'ether1' }
+  req.type = :stream
+  req.on_data = ->(data) do
+    puts "Current Load: #{data[:rx_bits_per_second]} bps"
+    # Return :stop to gracefully end the stream
+    :stop if some_condition
+  end
+end
 ```
 
 ## ORM Usage
