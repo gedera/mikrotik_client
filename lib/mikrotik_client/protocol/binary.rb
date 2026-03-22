@@ -68,8 +68,6 @@ module MikrotikClient
         elsif len < 0x4000
           [len | 0x8000].pack("n")
         elsif len < 0x200000
-          [len | 0xC00000].pack("C n").unpack("C3").pack("C3") # 3 bytes
-          # Optimized 3-byte packing
           [(len >> 16) | 0xC0, (len >> 8) & 0xFF, len & 0xFF].pack("C3")
         elsif len < 0x10000000
           [len | 0xE0000000].pack("N")
@@ -91,8 +89,6 @@ module MikrotikClient
         elsif (b1 & 0x20).zero?
           ((b1 & 0x1F) << 16) | @socket.read(2).unpack1("n")
         elsif (b1 & 0x10).zero?
-          ((b1 & 0x0F) << 24) | @socket.read(3).unpack("C n").inject { |s, v| (s << 16) | v }
-          # Refined 4-byte decode
           bytes = @socket.read(3).unpack("C3")
           ((b1 & 0x0F) << 24) | (bytes[0] << 16) | (bytes[1] << 8) | bytes[2]
         elsif b1 == 0xF0

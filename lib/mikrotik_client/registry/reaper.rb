@@ -18,10 +18,13 @@ module MikrotikClient
       def start
         return false if running?
 
+        @stop = false
         @thread = Thread.new do
           Thread.current.name = "mikrotik_client_reaper"
           loop do
             sleep(@interval)
+            break if @stop
+
             run_once
           rescue StandardError => e
             # Ensure the reaper thread doesn't die on single pool errors
@@ -37,8 +40,13 @@ module MikrotikClient
       end
 
       # Stops the reaper thread gracefully.
+      # Signals the thread to exit and wakes it if sleeping, then waits up to 5s.
       def stop
-        @thread&.kill
+        return unless running?
+
+        @stop = true
+        @thread.wakeup rescue nil  # Interrupt sleep so it exits promptly
+        @thread.join(5)
         @thread = nil
       end
 

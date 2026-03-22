@@ -27,24 +27,28 @@ module MikrotikClient
       end
 
       # Connects to the MikroTik device and performs authentication.
+      # Ensures the TCP socket is closed if SSL handshake or authentication fail.
       def connect!
         timeout = MikrotikClient.config.connect_timeout
-        @socket = Socket.tcp(@settings.host, @settings.port, connect_timeout: timeout)
-        
-        # Set read timeout on the socket
-        @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_RCVTIMEO, [MikrotikClient.config.read_timeout, 0].pack("l_2"))
-        @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, [MikrotikClient.config.read_timeout, 0].pack("l_2"))
+        tcp_socket = Socket.tcp(@settings.host, @settings.port, connect_timeout: timeout)
+        tcp_socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_RCVTIMEO, [MikrotikClient.config.read_timeout, 0].pack("l_2"))
+        tcp_socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, [MikrotikClient.config.read_timeout, 0].pack("l_2"))
 
-        # Enable SSL if configured
-        if @settings.adapter_options[:ssl]
+        @socket = if @settings.adapter_options[:ssl]
           ssl_context = OpenSSL::SSL::SSLContext.new
-          @socket = OpenSSL::SSL::SSLSocket.new(@socket, ssl_context)
-          @socket.connect
+          ssl_socket = OpenSSL::SSL::SSLSocket.new(tcp_socket, ssl_context)
+          ssl_socket.connect
+          ssl_socket
+        else
+          tcp_socket
         end
 
         @protocol = Protocol::Binary.new(@socket)
         authenticate!
         self
+      rescue StandardError
+        tcp_socket&.close rescue nil
+        raise
       end
 
       # Closes the socket connection.

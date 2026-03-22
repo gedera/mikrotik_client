@@ -29,11 +29,16 @@ module MikrotikClient
       @reaper.start
     end
 
+    INSTANCE_MUTEX = Mutex.new
+    private_constant :INSTANCE_MUTEX
+
     class << self
       # Returns the singleton instance of the registry.
+      # Thread-safe: uses a double-checked lock to avoid redundant synchronization.
       # @return [Registry]
       def instance
-        @instance ||= new
+        return @instance if @instance
+        INSTANCE_MUTEX.synchronize { @instance ||= new }
       end
 
       # Yields a connection from the pool for the given settings.
