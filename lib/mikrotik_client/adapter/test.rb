@@ -8,9 +8,9 @@ module MikrotikClient
       AdapterRegistry.register :test, self
       attr_accessor :stubs
 
-      def initialize(options = {})
+      def initialize(settings)
         super
-        @stubs = options[:stubs] || {}
+        @stubs = @settings.adapter_options[:stubs] || {}
       end
 
       def connect!
