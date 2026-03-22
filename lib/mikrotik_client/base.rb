@@ -96,8 +96,6 @@ module MikrotikClient
           c.user = config[:user]
           c.pass = config[:pass]
           c.adapter adapter_name, **options
-          
-          # Stack standard with Transformer and Observability
           c.use Middleware::Transformer
           c.use Middleware::RequestTransformer
           c.use Middleware::Logger
@@ -172,7 +170,10 @@ module MikrotikClient
 
     def create_resource
       resp = connection.post(mikrotik_path, attributes)
-      attributes[:id] = resp[:id]
+      new_id = resp[:id] || resp["id"]
+      raise Error, "MikroTik did not return an ID after create on #{mikrotik_path}" unless new_id
+
+      attributes[:id] = new_id
       @persisted = true
       true
     end
