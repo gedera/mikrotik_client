@@ -45,14 +45,12 @@ module MikrotikClient
     # Initialize a new client with a configuration block.
     #
     # @param url [String, nil] Base URL or path.
-    # @param defaults [Boolean] Whether to apply the default middleware stack.
     # @yield [self] The client instance.
-    def initialize(url = nil, defaults: true)
+    def initialize(url = nil)
       @url = url
       @params = {}
       @settings = ConnectionSettings.new
       @builder = MiddlewareStack.new
-      DEFAULT_MIDDLEWARE.each { |m| @builder.use(m) } if defaults
       yield(self) if block_given?
     end
 

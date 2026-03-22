@@ -96,6 +96,11 @@ module MikrotikClient
           c.user = config[:user]
           c.pass = config[:pass]
           c.adapter adapter_name, **options
+          c.use Middleware::Transformer
+          c.use Middleware::RequestTransformer
+          c.use Middleware::Logger
+          c.use Middleware::RaiseError
+          c.use Middleware::Encoder
         end
       end
     end
