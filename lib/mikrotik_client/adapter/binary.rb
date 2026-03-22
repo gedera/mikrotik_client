@@ -29,14 +29,14 @@ module MikrotikClient
       # Connects to the MikroTik device and performs authentication.
       def connect!
         timeout = MikrotikClient.config.connect_timeout
-        @socket = Socket.tcp(@configuration.host, @configuration.port, connect_timeout: timeout)
+        @socket = Socket.tcp(@settings.host, @settings.port, connect_timeout: timeout)
         
         # Set read timeout on the socket
         @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_RCVTIMEO, [MikrotikClient.config.read_timeout, 0].pack("l_2"))
         @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, [MikrotikClient.config.read_timeout, 0].pack("l_2"))
 
         # Enable SSL if configured
-        if @configuration.adapter_options[:ssl]
+        if @settings.adapter_options[:ssl]
           ssl_context = OpenSSL::SSL::SSLContext.new
           @socket = OpenSSL::SSL::SSLSocket.new(@socket, ssl_context)
           @socket.connect
@@ -62,8 +62,8 @@ module MikrotikClient
         if response.first == "!done"
           @protocol.write_sentence([
             "/login",
-            "=name=#{@configuration.user}",
-            "=password=#{@configuration.pass}"
+            "=name=#{@settings.user}",
+            "=password=#{@settings.pass}"
           ])
           final_response = @protocol.read_sentence
           raise AuthenticationError, "Login failed" unless final_response.first == "!done"

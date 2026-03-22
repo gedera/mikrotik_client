@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module MikrotikClient
-  # Holds connection settings and handles middleware registration.
+  # Holds connection settings and handles adapter selection.
   #
   # @attr [String] host The MikroTik host IP or domain.
   # @attr [Integer] port The port number (default: 8728 for API, 443 for REST).
@@ -9,7 +9,7 @@ module MikrotikClient
   # @attr [String] pass The password for authentication.
   # @attr [Symbol] adapter_name The adapter type (:mtik, :rest).
   # @attr [Hash] adapter_options Additional options for the adapter.
-  class Configuration
+  class ConnectionSettings
     attr_accessor :host, :port, :user, :pass, :adapter_name, :adapter_options
 
     def initialize

@@ -36,23 +36,23 @@ module MikrotikClient
         @instance ||= new
       end
 
-      # Yields a connection from the pool for the given configuration.
-      # @param config [Configuration]
+      # Yields a connection from the pool for the given settings.
+      # @param settings [ConnectionSettings]
       # @yieldparam conn [Adapter::Base]
       # @return [Object]
-      def with_connection(config, &block)
-        instance.with_connection(config, &block)
+      def with_connection(settings, &block)
+        instance.with_connection(settings, &block)
       end
     end
 
-    # Retrieves or creates a pool for the config and yields a connection.
-    # @param config [Configuration]
+    # Retrieves or creates a pool for the settings and yields a connection.
+    # @param settings [ConnectionSettings]
     # @yieldparam conn [Adapter::Base]
     # @return [Object]
-    def with_connection(config, &block)
-      key = config.connection_key
+    def with_connection(settings, &block)
+      key = settings.connection_key
       entry = mon_synchronize do
-        @pools[key] ||= create_entry(config)
+        @pools[key] ||= create_entry(settings)
         @pools[key].last_used_at = Time.now
         @pools[key]
       end
@@ -82,16 +82,16 @@ module MikrotikClient
     private
 
     # Creates a new PoolEntry with a configured ConnectionPool.
-    # @param config [Configuration]
+    # @param settings [ConnectionSettings]
     # @return [PoolEntry]
-    def create_entry(config)
-      size = config.adapter_options[:pool_size] || MikrotikClient.config.pool_size
-      timeout = config.adapter_options[:pool_timeout] || MikrotikClient.config.pool_timeout
+    def create_entry(settings)
+      size = settings.adapter_options[:pool_size] || MikrotikClient.config.pool_size
+      timeout = settings.adapter_options[:pool_timeout] || MikrotikClient.config.pool_timeout
 
       pool = ConnectionPool.new(size: size, timeout: timeout) do
-        adapter_class = AdapterRegistry.lookup(config.adapter_name)
-        adapter_class.new(config.adapter_options).tap do |adapter|
-          adapter.instance_variable_set(:@configuration, config)
+        adapter_class = AdapterRegistry.lookup(settings.adapter_name)
+        adapter_class.new(settings.adapter_options).tap do |adapter|
+          adapter.instance_variable_set(:@settings, settings)
           adapter.connect!
         end
       end

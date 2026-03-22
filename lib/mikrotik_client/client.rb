@@ -18,8 +18,8 @@ module MikrotikClient
   class Client
     extend Forwardable
 
-    # @return [Configuration] Connection configuration.
-    attr_reader :configuration
+    # @return [ConnectionSettings] Connection settings.
+    attr_reader :settings
 
     # @return [MiddlewareStack] The middleware builder.
     attr_reader :builder
@@ -30,8 +30,8 @@ module MikrotikClient
     # @return [Hash] Default parameters for all requests.
     attr_accessor :params
 
-    # Delegate configuration methods to the configuration object
-    def_delegators :@configuration, :host, :host=, :port, :port=, :user, :user=, :pass, :pass=, :adapter
+    # Delegate configuration methods to the settings object
+    def_delegators :@settings, :host, :host=, :port, :port=, :user, :user=, :pass, :pass=, :adapter
 
     # Initialize a new client with a configuration block.
     #
@@ -40,7 +40,7 @@ module MikrotikClient
     def initialize(url = nil)
       @url = url
       @params = {}
-      @configuration = Configuration.new
+      @settings = ConnectionSettings.new
       @builder = MiddlewareStack.new
       yield(self) if block_given?
     end
@@ -114,7 +114,7 @@ module MikrotikClient
         path: request.path,
         body: request.body,
         params: request.params,
-        configuration: configuration,
+        settings: settings,
         response: nil
       }
 
@@ -127,7 +127,7 @@ module MikrotikClient
     # @return [Object] The processed response data from the environment.
     def execute_stack(env)
       # We use the Registry to get a connected adapter from the pool
-      Registry.with_connection(configuration) do |adapter|
+      Registry.with_connection(settings) do |adapter|
         # Build the chain using the builder
         app = @builder.build(adapter)
 

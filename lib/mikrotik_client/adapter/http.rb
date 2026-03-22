@@ -55,12 +55,12 @@ module MikrotikClient
 
       # Configures the Faraday connection.
       def connect!
-        use_ssl = @configuration.adapter_options.fetch(:ssl, true)
+        use_ssl = @settings.adapter_options.fetch(:ssl, true)
         scheme = use_ssl ? "https" : "http"
-        base_url = "#{scheme}://#{@configuration.host}:#{@configuration.port}/"
+        base_url = "#{scheme}://#{@settings.host}:#{@settings.port}/"
         
         @connection = Faraday.new(url: base_url) do |f|
-          f.request :authorization, :basic, @configuration.user, @configuration.pass
+          f.request :authorization, :basic, @settings.user, @settings.pass
           f.request :json
           f.response :json
           
@@ -68,7 +68,7 @@ module MikrotikClient
           f.options[:open_timeout] = MikrotikClient.config.connect_timeout
 
           if use_ssl
-            f.ssl[:verify] = @configuration.adapter_options.fetch(:ssl_verify, true)
+            f.ssl[:verify] = @settings.adapter_options.fetch(:ssl_verify, true)
           end
           
           f.adapter Faraday.default_adapter
