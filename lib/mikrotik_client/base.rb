@@ -21,23 +21,31 @@ module MikrotikClient
   class Base
     class_attribute :mikrotik_path
     
+    # @return [Hash] Attributes of the record.
     attr_accessor :attributes
+
+    # @return [Boolean] Is this record already on the MikroTik?
     attr_reader :persisted
+
+    # @return [Client, nil] The explicit client used for this instance.
+    attr_accessor :client
 
     # Initialize a new resource.
     #
     # @param attributes [Hash]
     # @param persisted [Boolean] Is this record already on the MikroTik?
-    def initialize(attributes = {}, persisted = false)
+    # @param client [Client, nil] Explicit client to use for this instance.
+    def initialize(attributes = {}, persisted = false, client: nil)
       @attributes = attributes.with_indifferent_access
       @persisted = persisted
+      @client = client
     end
 
     class << self
-      # Returns all resources.
-      # @return [Array<Base>]
+      # Delegate query methods to a new Scope.
+      # @return [Scope]
       def all
-        where({})
+        Scope.new(self)
       end
 
       # Find a resource by ID.
@@ -48,12 +56,17 @@ module MikrotikClient
       end
 
       # Find resources matching the criteria.
-      # @param clauses [Hash] Filters (translated to ?key=value).
-      # @return [Array<Base>]
+      # @param clauses [Hash] Filters.
+      # @return [Scope]
       def where(clauses = {})
-        response = connection.get(mikrotik_path, clauses)
-        records = response.is_a?(Array) ? response : [response]
-        records.reject(&:empty?).map { |attrs| new(attrs, true) }
+        all.where(clauses)
+      end
+
+      # Injects an explicit client for the query.
+      # @param client [Client]
+      # @return [Scope]
+      def with_client(client)
+        all.with_client(client)
       end
 
       # Create and save a new resource.
@@ -66,9 +79,10 @@ module MikrotikClient
       end
 
       # Builds a connection using the current thread context.
+      # This is the fallback connection if no explicit client is provided.
       #
       # @return [Client]
-      def connection
+      def default_connection
         config = MikrotikClient::Current.config
         raise Error, "MikrotikClient::Current.config not set for this thread" unless config
 
@@ -93,6 +107,7 @@ module MikrotikClient
       end
     end
 
+
     # Primary ID of the record.
     # @return [String]
     def id
@@ -109,6 +124,12 @@ module MikrotikClient
       @persisted
     end
 
+    # Returns the connection to use for this instance.
+    # @return [Client]
+    def connection
+      @client || self.class.default_connection
+    end
+
     # Saves the resource (POST for new, PUT for existing).
     # @return [Boolean]
     def save
@@ -118,7 +139,7 @@ module MikrotikClient
     # Deletes the resource from the MikroTik.
     # @return [Boolean]
     def destroy
-      self.class.connection.delete(mikrotik_path, { id: id })
+      connection.delete(mikrotik_path, { id: id })
       @persisted = false
       true
     end
@@ -150,14 +171,14 @@ module MikrotikClient
     private
 
     def create_resource
-      resp = self.class.connection.post(mikrotik_path, attributes)
+      resp = connection.post(mikrotik_path, attributes)
       attributes[:id] = resp[:id]
       @persisted = true
       true
     end
 
     def update_resource
-      self.class.connection.put(mikrotik_path, attributes.except(:id), { id: id })
+      connection.put(mikrotik_path, attributes.except(:id), { id: id })
       true
     end
   end

@@ -68,7 +68,7 @@ RSpec.describe MikrotikClient::Base do
   describe "Thread Safety & Scoping" do
     it "raises error if config is missing" do
       MikrotikClient::Current.config = nil
-      expect { FirewallAddress.all }.to raise_error(MikrotikClient::Error, /not set/)
+      expect { FirewallAddress.all.to_a }.to raise_error(MikrotikClient::Error, /not set/)
     end
 
     it "switches context using with_config" do
