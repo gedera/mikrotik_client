@@ -7,9 +7,9 @@ module MikrotikClient
     #
     # @abstract
     class Base
-      # @param options [Hash] Optional settings for the adapter.
-      def initialize(options = {})
-        @options = options
+      # @param settings [ConnectionSettings] The connection settings for this adapter.
+      def initialize(settings)
+        @settings = settings
       end
 
       # Performs the communication with the MikroTik device.

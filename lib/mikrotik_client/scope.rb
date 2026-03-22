@@ -39,13 +39,17 @@ module MikrotikClient
     end
 
     # Executes the query and returns model instances.
+    # Results are cached. Call #reload to force a fresh fetch.
     # @return [Array<Base>]
     def to_a
-      @records ||= begin
-        response = connection.get(model.mikrotik_path, @clauses)
-        records = response.is_a?(Array) ? response : [response]
-        records.reject(&:empty?).map { |attrs| model.new(attrs, true, client: @client) }
-      end
+      @records ||= fetch_records
+    end
+
+    # Clears the cached records and returns self for chaining.
+    # @return [Scope]
+    def reload
+      @records = nil
+      self
     end
 
     # Returns the connection to use (explicit client or default).
@@ -55,6 +59,12 @@ module MikrotikClient
     end
 
     private
+
+    def fetch_records
+      response = connection.get(model.mikrotik_path, @clauses)
+      records = response.is_a?(Array) ? response : [response]
+      records.reject(&:empty?).map { |attrs| model.new(attrs, true, client: @client) }
+    end
 
     # Creates a copy of the current scope with updated attributes.
     def spawn(clauses: nil, client: nil)

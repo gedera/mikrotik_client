@@ -96,10 +96,7 @@ module MikrotikClient
 
       pool = ConnectionPool.new(size: size, timeout: timeout) do
         adapter_class = AdapterRegistry.lookup(settings.adapter_name)
-        adapter_class.new(settings.adapter_options).tap do |adapter|
-          adapter.instance_variable_set(:@settings, settings)
-          adapter.connect!
-        end
+        adapter_class.new(settings).tap(&:connect!)
       end
 
       PoolEntry.new(pool, Time.now)
