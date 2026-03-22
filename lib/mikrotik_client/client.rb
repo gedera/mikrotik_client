@@ -21,8 +21,8 @@ module MikrotikClient
     # @return [Configuration] Connection configuration.
     attr_reader :configuration
 
-    # @return [Array<Array>] Middleware stack.
-    attr_reader :middlewares
+    # @return [MiddlewareStack] The middleware builder.
+    attr_reader :builder
 
     # @return [String, nil] Base URL or path.
     attr_accessor :url
@@ -41,7 +41,7 @@ module MikrotikClient
       @url = url
       @params = {}
       @configuration = Configuration.new
-      @middlewares = []
+      @builder = MiddlewareStack.new
       yield(self) if block_given?
     end
 
@@ -51,7 +51,7 @@ module MikrotikClient
     # @param args [Array] Arguments to pass to the middleware initializer.
     # @return [void]
     def use(middleware_class, *args)
-      @middlewares << [middleware_class, args]
+      @builder.use(middleware_class, *args)
     end
 
     # Performs a GET request (print in MikroTik API).
@@ -95,15 +95,6 @@ module MikrotikClient
       run_request(:delete, path, nil, params, &block)
     end
 
-    # Register a middleware to the stack.
-    #
-    # @param middleware_class [Class] The middleware class to use.
-    # @param args [Array] Arguments to pass to the middleware initializer.
-    # @return [void]
-    def use(middleware_class, *args)
-      @middlewares << [middleware_class, args]
-    end
-
     private
 
     # Internal method to orquestrate the middleware pipeline.
@@ -137,10 +128,8 @@ module MikrotikClient
     def execute_stack(env)
       # We use the Registry to get a connected adapter from the pool
       Registry.with_connection(configuration) do |adapter|
-        # Build the chain: wrap the connected adapter with middlewares in reverse order
-        app = @middlewares.reverse.reduce(adapter) do |next_app, (middleware_class, args)|
-          middleware_class.new(next_app, *args)
-        end
+        # Build the chain using the builder
+        app = @builder.build(adapter)
 
         # Start execution
         app.call(env)
