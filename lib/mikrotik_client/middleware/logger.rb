@@ -4,49 +4,87 @@ require "active_support/notifications"
 
 module MikrotikClient
   module Middleware
-    # Middleware for logging requests and responses.
-    # Uses ActiveSupport::Notifications for instrumentation and the global logger.
+    # Middleware for structured request/response logging and instrumentation.
     #
-    # @author Gabriel
-    # @since 0.1.0
+    # Logs at INFO on every request with key=value pairs compatible with
+    # log aggregators (Datadog, ELK, Loki, CloudWatch).
+    # Logs at ERROR when an exception is raised, with full error context.
+    # Publishes an ActiveSupport::Notifications event with complete payload.
+    #
+    # Keys filtered from debug body output: password, pass, passwd, secret, token.
     class Logger < Base
-      # Executes the request and logs its performance and details.
+      SENSITIVE_KEYS = %w[password pass passwd secret token].freeze
+      private_constant :SENSITIVE_KEYS
+
+      # Executes the request, then logs and instruments the outcome.
+      # The logging rescue ensures that logger failures never mask the original exception.
       #
       # @param env [Hash]
       # @return [Hash]
       def call(env)
-        start_time = Time.now
-        
-        ActiveSupport::Notifications.instrument("request.mikrotik_client", 
-          host: env[:settings].host,
-          path: env[:path],
-          method: env[:method]
-        ) do
-          @app.call(env)
-        end
+        start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        exception = nil
+
+        @app.call(env)
+      rescue => exception
+        raise
       ensure
-        duration = (Time.now - start_time) * 1000
-        log_request(env, duration)
+        duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000).round(2)
+        log_request(env, duration_ms, exception)
+        publish_notification(env, duration_ms, exception)
       end
 
       private
 
-      # Logs the request details using the global logger.
-      #
-      # @param env [Hash]
-      # @param duration [Float] Execution time in milliseconds.
-      def log_request(env, duration)
-        msg = "[MikrotikClient] #{env[:method].upcase} #{env[:path]} " \
-              "(#{duration.round(2)}ms) - Host: #{env[:settings].host}"
-        
-        # Log basic info
-        MikrotikClient.logger.info(msg)
+      def log_request(env, duration_ms, exception)
+        status  = exception ? "error" : "ok"
+        level   = exception ? :error  : :info
+        adapter = env[:settings]&.adapter_name
+        host    = env[:settings]&.host
 
-        # Log detailed info in DEBUG mode
-        if MikrotikClient.logger.debug?
-          MikrotikClient.logger.debug "[MikrotikClient] Params: #{env[:params].inspect}"
-          MikrotikClient.logger.debug "[MikrotikClient] Body: #{env[:body].inspect}"
-          MikrotikClient.logger.debug "[MikrotikClient] Response: #{env[:response].inspect}"
+        line = "component=mikrotik_client event=request" \
+               " method=#{env[:method]&.upcase}" \
+               " path=#{env[:path]}" \
+               " host=#{host}" \
+               " adapter=#{adapter}" \
+               " duration_ms=#{duration_ms}" \
+               " status=#{status}"
+
+        line += " error_class=#{exception.class} error=#{exception.message}" if exception
+
+        MikrotikClient.logger.public_send(level, line)
+
+        MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail params=#{env[:params].inspect}" }
+        MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail body=#{sanitize(env[:body]).inspect}" }
+        MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail response=#{env[:response].inspect}" } unless exception
+      rescue => log_error
+        MikrotikClient.logger.warn "component=mikrotik_client event=logger_failure error=#{log_error.message}" rescue nil
+      end
+
+      def publish_notification(env, duration_ms, exception)
+        ActiveSupport::Notifications.instrument("request.mikrotik_client",
+          method:        env[:method],
+          path:          env[:path],
+          host:          env[:settings]&.host,
+          adapter:       env[:settings]&.adapter_name,
+          duration_ms:   duration_ms,
+          status:        exception ? :error : :ok,
+          error_class:   exception&.class&.name,
+          error_message: exception&.message
+        )
+      rescue => e
+        MikrotikClient.logger.warn "component=mikrotik_client event=notification_failure error=#{e.message}" rescue nil
+      end
+
+      # Returns a copy of the hash with sensitive values replaced by [FILTERED].
+      #
+      # @param data [Hash, Object]
+      # @return [Hash, Object]
+      def sanitize(data)
+        return data unless data.is_a?(Hash)
+
+        data.each_with_object({}) do |(k, v), h|
+          h[k] = SENSITIVE_KEYS.any? { |s| k.to_s.downcase.include?(s) } ? "[FILTERED]" : v
         end
       end
     end

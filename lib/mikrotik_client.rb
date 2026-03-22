@@ -58,7 +58,6 @@ module MikrotikClient
     # @return [void]
     def configure
       yield(config) if block_given?
-      config.apply_log_level!
     end
 
     # Temporary scoped configuration for a block of code.
