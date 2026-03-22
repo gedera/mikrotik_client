@@ -73,9 +73,10 @@ module MikrotikClient
       mon_synchronize do
         now = Time.now
         @pools.delete_if do |key, entry|
-          if (now - entry.last_used_at) > idle_timeout
-            # Gracefully shutdown the pool and disconnect all its members
+          idle_for = (now - entry.last_used_at).round
+          if idle_for > idle_timeout
             entry.pool.shutdown { |adapter| adapter.disconnect! }
+            MikrotikClient.logger.info "component=mikrotik_client event=pool_pruned key=#{key} idle_for_seconds=#{idle_for}"
             true
           else
             false
@@ -91,13 +92,18 @@ module MikrotikClient
     # @return [PoolEntry]
     def create_entry(settings)
       settings.validate!
-      size = settings.adapter_options[:pool_size] || MikrotikClient.config.pool_size
+      size    = settings.adapter_options[:pool_size]    || MikrotikClient.config.pool_size
       timeout = settings.adapter_options[:pool_timeout] || MikrotikClient.config.pool_timeout
 
       pool = ConnectionPool.new(size: size, timeout: timeout) do
         adapter_class = AdapterRegistry.lookup(settings.adapter_name)
         adapter_class.new(settings).tap(&:connect!)
       end
+
+      MikrotikClient.logger.info "component=mikrotik_client event=pool_created" \
+                                 " key=#{settings.connection_key}" \
+                                 " adapter=#{settings.adapter_name}" \
+                                 " pool_size=#{size}"
 
       PoolEntry.new(pool, Time.now)
     end

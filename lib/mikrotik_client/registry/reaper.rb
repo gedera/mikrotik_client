@@ -27,8 +27,7 @@ module MikrotikClient
 
             run_once
           rescue StandardError => e
-            # Ensure the reaper thread doesn't die on single pool errors
-            warn "[MikrotikClient::Reaper] background error: #{e.message}"
+            MikrotikClient.logger.error "component=mikrotik_client event=reaper_error error_class=#{e.class} error=#{e.message}"
           end
         end
         true
