@@ -78,7 +78,15 @@ module MikrotikClient
 
       # Builds the API command sentence.
       def build_command(env)
-        cmd = ["#{env[:path]}/#{COMMAND_MAP[env[:method]]}"]
+        # For :orm mode (default), we append the command suffix (print, add, etc.)
+        # For :raw and :stream, we use the path exactly as provided.
+        full_command = if env[:type] == :orm
+                         "#{env[:path]}/#{COMMAND_MAP[env[:method]]}"
+                       else
+                         env[:path]
+                       end
+
+        cmd = [full_command]
 
         # RequestTransformer already converted keys to kebab-case and .id.
         # Explicit .to_s guards against non-string keys/values reaching the socket.
@@ -113,8 +121,24 @@ module MikrotikClient
             data = sentence if data.empty? && env[:type] == :raw
 
             if env[:type] == :stream && env[:on_data]
+              # In stream mode, we want to provide transformed data if not raw
+              processed_data = data
+              if env[:type] != :raw
+                # Basic transformation for symbols and types
+                processed_data = data.each_with_object({}) do |(k, v), hash|
+                  new_key = k.to_s.sub(/^\./, "").gsub("-", "_").to_sym
+                  new_val = case v
+                            when "true", "yes" then true
+                            when "false", "no" then false
+                            when /^-?\d+$/ then v.to_i
+                            else v
+                            end
+                  hash[new_key] = new_val
+                end
+              end
               # Execute callback and check if user wants to stop
-              break if env[:on_data].call(data) == :stop
+              # We return the current results if stopped
+              return results if env[:on_data].call(processed_data) == :stop
             else
               results << data
             end
@@ -129,8 +153,7 @@ module MikrotikClient
           when "!trap", "!fatal"
             error = parse_sentence(sentence)
             error["_error_type"] = type
-            # In a stream, we might want to stop on error
-            break if env[:type] == :stream
+            return error if env[:type] == :stream
           end
         end
       end
