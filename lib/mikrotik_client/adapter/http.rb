@@ -9,6 +9,8 @@ module MikrotikClient
     # Adapter for MikroTik's REST API (ROS v7.1+).
     # Uses standard HTTP/JSON communication.
     class Http < Base
+      AdapterRegistry.register :http, self
+      AdapterRegistry.register :rest, self # Alias
       # Map our internal methods to MikroTik REST verbs
       METHOD_MAP = {
         get: :get,

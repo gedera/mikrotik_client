@@ -8,6 +8,8 @@ module MikrotikClient
     # Adapter for MikroTik's Binary API protocol.
     # Used for ROS v6 and legacy v7 communication.
     class Binary < Base
+      AdapterRegistry.register :binary, self
+      AdapterRegistry.register :mtik, self # Alias for backward compatibility
       # Map HTTP verbs to MikroTik API commands
       COMMAND_MAP = {
         get: "print",

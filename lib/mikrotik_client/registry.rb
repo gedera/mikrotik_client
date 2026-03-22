@@ -74,8 +74,8 @@ module MikrotikClient
 
       pool = ConnectionPool.new(size: size, timeout: timeout) do
         # Build the actual adapter and connect
-        # We use lookup_adapter to get the class
-        adapter_class = Client.new.lookup_adapter(config.adapter_name)
+        # We use AdapterRegistry to get the class without depending on Client
+        adapter_class = AdapterRegistry.lookup(config.adapter_name)
         adapter_class.new(config.adapter_options).tap do |adapter|
           # We pass the full config to the adapter so it knows where to connect
           adapter.instance_variable_set(:@configuration, config)

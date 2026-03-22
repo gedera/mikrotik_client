@@ -95,19 +95,13 @@ module MikrotikClient
       run_request(:delete, path, nil, params, &block)
     end
 
-    # Resolve an adapter class by its symbolic name.
-    # This is used by the Registry to create new connections.
+    # Register a middleware to the stack.
     #
-    # @param name [Symbol] The adapter name (:binary, :http).
-    # @return [Class] The adapter class.
-    # @raise [Error] If the adapter is not found.
-    def lookup_adapter(name)
-      case name
-      when :binary then Adapter::Binary
-      when :http then Adapter::Http
-      else
-        raise Error, "Unknown adapter: #{name}"
-      end
+    # @param middleware_class [Class] The middleware class to use.
+    # @param args [Array] Arguments to pass to the middleware initializer.
+    # @return [void]
+    def use(middleware_class, *args)
+      @middlewares << [middleware_class, args]
     end
 
     private

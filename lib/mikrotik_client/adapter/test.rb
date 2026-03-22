@@ -5,6 +5,7 @@ module MikrotikClient
     # Mock adapter for testing purposes.
     # Allows stubbing responses without a real connection.
     class Test < Base
+      AdapterRegistry.register :test, self
       attr_accessor :stubs
 
       def initialize(options = {})
