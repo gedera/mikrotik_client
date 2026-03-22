@@ -18,15 +18,6 @@ module MikrotikClient
   class Client
     extend Forwardable
 
-    # Standard middleware applied to every client unless defaults: false is passed.
-    DEFAULT_MIDDLEWARE = [
-      Middleware::Transformer,
-      Middleware::RequestTransformer,
-      Middleware::Logger,
-      Middleware::RaiseError,
-      Middleware::Encoder
-    ].freeze
-
     # @return [ConnectionSettings] Connection settings.
     attr_reader :settings
 
