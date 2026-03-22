@@ -13,7 +13,8 @@ graph TD
     Client --> Builder[MiddlewareStack: Pipeline]
     Builder --> M1[Middleware: Logger]
     M1 --> M2[Middleware: Transformer]
-    M2 --> M3[Middleware: ...]
+    M2 --> DT[DataTransformer: Normalizer]
+    DT --> M3[Middleware: ...]
     M3 --> Adapter[Adapter: Binary / HTTP]
     Adapter --> Registry[Registry: Connection Pool]
     Registry --> Router((MikroTik Router))
@@ -49,9 +50,12 @@ Un hilo independiente que limpia conexiones inactivas.
 ### 6. Scope & Lazy Loading (ORM)
 El ORM no ejecuta peticiones inmediatamente.
 - **Por qué**: Permite encadenar filtros (`.where(...).where(...)`) y permite inyectar clientes específicos antes de la ejecución.
-- **Cómo**: `MikrotikClient::Scope` acumula el estado de la consulta y solo llama al cliente cuando se itera sobre los resultados (`.to_a`, `.each`).
+### 7. DataTransformer (Normalización)
+Un componente centralizado que se encarga de convertir llaves de MikroTik (`kebab-case`) a símbolos de Ruby (`snake_case`) y realizar el casteo de tipos.
+- **Por qué**: Asegura que los datos sean consistentes en toda la gema, ya sea que vengan de un request estándar, un stream en tiempo real o el ORM.
+- **Cómo**: Implementado en `MikrotikClient::DataTransformer`, es utilizado tanto por los middlewares como directamente por el adaptador binario en modo streaming.
 
-### 7. Request Intent Pattern (Tipos de Petición)
+### 8. Request Intent Pattern (Tipos de Petición)
 El sistema permite cambiar el comportamiento de toda la tubería mediante el atributo `type` en el objeto `Request`.
 - **Por qué**: No todas las peticiones a un router son para obtener objetos. Algunas son flujos infinitos (monitor) o datos no estructurados (export).
 - **Cómo**: 

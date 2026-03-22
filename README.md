@@ -95,16 +95,24 @@ end
 ```
 
 #### Streaming Mode
-Perfect for commands that never end (e.g., `monitor-traffic`). It uses a callback to process data as it arrives without filling up memory.
+Ideal for long-running commands that push data continuously (e.g., `monitor-traffic` or log tailing). Unlike regular requests, Streaming Mode **does not accumulate data in memory**, making it safe for hours of monitoring.
+
+- **`req.type = :stream`**: Tells the client to enter an infinite read loop.
+- **`req.on_data = ->(data) { ... }`**: A callback executed for each packet (`!re`) received.
+- **Flow Control**: To stop the stream programmatically, return the symbol **`:stop`** from your callback.
 
 ```ruby
+# Monitor real-time traffic on ether1
 client.get("/interface/monitor-traffic") do |req|
   req.params = { interface: 'ether1' }
   req.type = :stream
+  
   req.on_data = ->(data) do
-    puts "Current Load: #{data[:rx_bits_per_second]} bps"
-    # Return :stop to gracefully end the stream
-    :stop if some_condition
+    # 'data' is already transformed (e.g., :rx_bits_per_second as Integer)
+    puts "Traffic In: #{data[:rx_bits_per_second]} bps"
+    
+    # Gracefully stop after receiving a specific threshold
+    :stop if data[:rx_bits_per_second] > 1_000_000
   end
 end
 ```
