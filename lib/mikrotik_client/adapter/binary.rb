@@ -121,23 +121,7 @@ module MikrotikClient
             data = sentence if data.empty? && env[:type] == :raw
 
             if env[:type] == :stream && env[:on_data]
-              # In stream mode, we want to provide transformed data if not raw
-              processed_data = data
-              if env[:type] != :raw
-                # Basic transformation for symbols and types
-                processed_data = data.each_with_object({}) do |(k, v), hash|
-                  new_key = k.to_s.sub(/^\./, "").gsub("-", "_").to_sym
-                  new_val = case v
-                            when "true", "yes" then true
-                            when "false", "no" then false
-                            when /^-?\d+$/ then v.to_i
-                            else v
-                            end
-                  hash[new_key] = new_val
-                end
-              end
-              # Execute callback and check if user wants to stop
-              # We return the current results if stopped
+              processed_data = DataTransformer.transform(data)
               return results if env[:on_data].call(processed_data) == :stop
             else
               results << data

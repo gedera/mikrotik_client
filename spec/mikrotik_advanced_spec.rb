@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "timeout"
 
 RSpec.describe "Advanced Request Modes (Integration)" do
   let(:v6_client) do
