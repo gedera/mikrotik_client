@@ -26,7 +26,7 @@ Never use `Kernel#warn` or `$stderr`. Always use `MikrotikClient.logger`.
 | `request` | INFO | `method`, `path`, `host`, `adapter`, `duration_ms`, `status` |
 | `request_detail` | DEBUG | `params`, `body` (sanitized), `response` |
 | `pool_created` | INFO | `key`, `adapter`, `pool_size` |
-| `pool_pruned` | INFO | `key`, `idle_for_seconds` |
+| `pool_pruned` | INFO | `key`, `idle_for_s` |
 | `reaper_error` | ERROR | `error_class`, `error` |
 
 ### Rules

@@ -11,9 +11,9 @@ module MikrotikClient
     # Logs at ERROR when an exception is raised, with full error context.
     # Publishes an ActiveSupport::Notifications event with complete payload.
     #
-    # Keys filtered from debug body output: password, pass, passwd, secret, token.
+    # Keys filtered from debug body output: password, pass, passwd, secret, token, api_key, auth.
     class Logger < Base
-      SENSITIVE_KEYS = %w[password pass passwd secret token].freeze
+      SENSITIVE_KEYS = %w[password pass passwd secret token api_key auth].freeze
       private_constant :SENSITIVE_KEYS
 
       # Executes the request, then logs and instruments the outcome.
@@ -52,13 +52,13 @@ module MikrotikClient
 
         line += " error_class=#{exception.class} error=#{exception.message}" if exception
 
-        MikrotikClient.logger.public_send(level, line)
+        MikrotikClient.logger.public_send(level) { line }
 
-        MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail params=#{env[:params].inspect}" }
+        MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail params=#{sanitize(env[:params]).inspect}" }
         MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail body=#{sanitize(env[:body]).inspect}" }
         MikrotikClient.logger.debug { "component=mikrotik_client event=request_detail response=#{env[:response].inspect}" } unless exception
       rescue => log_error
-        MikrotikClient.logger.warn "component=mikrotik_client event=logger_failure error=#{log_error.message}" rescue nil
+        MikrotikClient.logger.warn { "component=mikrotik_client event=logger_failure error=#{log_error.message}" } rescue nil
       end
 
       def publish_notification(env, duration_ms, exception)
@@ -67,24 +67,29 @@ module MikrotikClient
           path:          env[:path],
           host:          env[:settings]&.host,
           adapter:       env[:settings]&.adapter_name,
-          duration_ms:   duration_ms,
+          duration_ms:    duration_ms,
           status:        exception ? :error : :ok,
           error_class:   exception&.class&.name,
           error_message: exception&.message
         )
       rescue => e
-        MikrotikClient.logger.warn "component=mikrotik_client event=notification_failure error=#{e.message}" rescue nil
+        MikrotikClient.logger.warn { "component=mikrotik_client event=notification_failure error=#{e.message}" } rescue nil
       end
 
-      # Returns a copy of the hash with sensitive values replaced by [FILTERED].
+      # Recursively returns a copy of the data with sensitive values replaced by [FILTERED].
       #
-      # @param data [Hash, Object]
-      # @return [Hash, Object]
+      # @param data [Object]
+      # @return [Object]
       def sanitize(data)
-        return data unless data.is_a?(Hash)
-
-        data.each_with_object({}) do |(k, v), h|
-          h[k] = SENSITIVE_KEYS.any? { |s| k.to_s.downcase.include?(s) } ? "[FILTERED]" : v
+        case data
+        when Hash
+          data.each_with_object({}) do |(k, v), h|
+            h[k] = SENSITIVE_KEYS.any? { |s| k.to_s.downcase.include?(s) } ? "[FILTERED]" : sanitize(v)
+          end
+        when Array
+          data.map { |v| sanitize(v) }
+        else
+          data
         end
       end
     end

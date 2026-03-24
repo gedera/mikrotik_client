@@ -14,7 +14,7 @@ module MikrotikClient
 
     # Represents a pool entry in the registry with its metadata.
     # @attr [ConnectionPool] pool The actual connection pool.
-    # @attr [Time] last_used_at The timestamp of the last time this pool was accessed.
+    # @attr [Float] last_used_at The monotonic timestamp of the last time this pool was accessed.
     PoolEntry = Struct.new(:pool, :last_used_at)
 
     # @return [Integer] Seconds of inactivity before a pool is pruned.
@@ -58,7 +58,7 @@ module MikrotikClient
       key = settings.connection_key
       entry = mon_synchronize do
         @pools[key] ||= create_entry(settings)
-        @pools[key].last_used_at = Time.now
+        @pools[key].last_used_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         @pools[key]
       end
 
@@ -71,12 +71,12 @@ module MikrotikClient
     # @return [void]
     def prune_idle_pools
       mon_synchronize do
-        now = Time.now
+        now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         @pools.delete_if do |key, entry|
           idle_for = (now - entry.last_used_at).round
           if idle_for > idle_timeout
             entry.pool.shutdown { |adapter| adapter.disconnect! }
-            MikrotikClient.logger.info "component=mikrotik_client event=pool_pruned key=#{key} idle_for_seconds=#{idle_for}"
+            MikrotikClient.logger.info { "component=mikrotik_client event=pool_pruned key=#{key} idle_for_s=#{idle_for}" }
             true
           else
             false
@@ -100,12 +100,14 @@ module MikrotikClient
         adapter_class.new(settings).tap(&:connect!)
       end
 
-      MikrotikClient.logger.info "component=mikrotik_client event=pool_created" \
-                                 " key=#{settings.connection_key}" \
-                                 " adapter=#{settings.adapter_name}" \
-                                 " pool_size=#{size}"
+      MikrotikClient.logger.info do
+        "component=mikrotik_client event=pool_created" \
+        " key=#{settings.connection_key}" \
+        " adapter=#{settings.adapter_name}" \
+        " pool_size=#{size}"
+      end
 
-      PoolEntry.new(pool, Time.now)
+      PoolEntry.new(pool, Process.clock_gettime(Process::CLOCK_MONOTONIC))
     end
   end
 end

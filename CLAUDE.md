@@ -13,7 +13,7 @@ Standard events and their required fields:
 | `request` | `method`, `path`, `host`, `adapter`, `duration_ms`, `status` |
 | `request_detail` | `params`, `body` (sanitized), `response` |
 | `pool_created` | `key`, `adapter`, `pool_size` |
-| `pool_pruned` | `key`, `idle_for_seconds` |
+| `pool_pruned` | `key`, `idle_for_s` |
 | `reaper_error` | `error_class`, `error` |
 
 ActiveSupport::Notifications event: `request.mikrotik_client`

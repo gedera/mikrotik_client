@@ -58,7 +58,7 @@ component=mikrotik_client event=request_detail response=[{:address=>"10.0.0.1/24
 
 ```
 component=mikrotik_client event=pool_created key=admin@10.0.0.1:8728 adapter=binary pool_size=5
-component=mikrotik_client event=pool_pruned key=admin@10.0.0.1:8728 idle_for_seconds=312
+component=mikrotik_client event=pool_pruned key=admin@10.0.0.1:8728 idle_for_s=312
 ```
 
 ### Background Errors (emitted by `Registry::Reaper`)
